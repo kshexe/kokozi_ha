@@ -6,7 +6,6 @@ from typing import Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import slugify
 
 from .const import DOMAIN
 from .coordinator import KokoziDataUpdateCoordinator
@@ -23,12 +22,17 @@ class KokoziEntity(CoordinatorEntity[KokoziDataUpdateCoordinator]):
         unique_id: str,
         device_info: DeviceInfo,
         entity_domain: str | None = None,
+        object_id: str | None = None,
     ) -> None:
-        """Initialize the entity."""
+        """Initialize the entity.
+
+        entity_id is left for Home Assistant to auto-generate from the
+        device/entity name (its slugify() romanizes Korean text fine, e.g.
+        "코코지 하우스" -> "kokoji_hauseu"). entity_domain/object_id are kept
+        as accepted-but-unused parameters for call-site compatibility.
+        """
         super().__init__(coordinator)
         self._attr_unique_id = unique_id
-        if entity_domain is not None:
-            self.entity_id = f"{entity_domain}.{slugify(unique_id)}"
         self._attr_device_info = device_info
 
 
@@ -45,12 +49,11 @@ def house_device_info(house: dict[str, Any]) -> DeviceInfo:
     )
 
 
-def arti_device_info(arti: dict[str, Any]) -> DeviceInfo:
-    """Return device info for a Kokozi Arti."""
-    arti_id = arti["id"]
+def arti_group_device_info() -> DeviceInfo:
+    """Return the shared device info grouping all Arti binary sensors."""
     return DeviceInfo(
-        identifiers={(DOMAIN, f"arti_{arti_id}")},
-        name=arti.get("name") or f"Arti {arti_id[-6:]}",
+        identifiers={(DOMAIN, "arti_group")},
+        name="아띠",
         manufacturer="Kokozi",
-        model=arti.get("typeId") or arti.get("type") or "Arti",
+        model="아띠",
     )

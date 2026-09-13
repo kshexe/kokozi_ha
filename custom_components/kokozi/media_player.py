@@ -85,6 +85,7 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
             f"house_{house_id}_media_player",
             house_device_info(coordinator.data.houses[house_id]),
             MEDIA_PLAYER_DOMAIN,
+            "kokozi_house",
         )
         self._attr_name = None
 

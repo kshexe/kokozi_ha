@@ -14,8 +14,8 @@ AUTH_BASE_URL = "https://auth.kokozi.co.kr"
 CLIENT_NAME = "kokozi-mobile"
 CLIENT_ID = "kokozi-mobile"
 CLIENT_SECRET = "S5-gUDrpKoJ6IGRvgOM1BvFk4RZdtxaQYUGiZacmQrs"
-DEFAULT_COUNTRY_CODE = "TW"
-DEFAULT_LOCALE = "zh-TW"
+DEFAULT_COUNTRY_CODE = "KR"
+DEFAULT_LOCALE = "ko-KR"
 REDIRECT_URL = "kokozi://BottomTab"
 
 CONF_ACCESS_TOKEN = "access_token"
@@ -46,6 +46,5 @@ MIN_POLLING_INTERVAL = 10
 MAX_POLLING_INTERVAL = 3600
 
 LOGIN_PROVIDER_EMAIL = "email"
-LOGIN_PROVIDER_GOOGLE = "google"
 
 DEEP_LINK_AUTH_CODE = "deep_link_auth_code"

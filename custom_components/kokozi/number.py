@@ -27,8 +27,9 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     async_add_entities(
         [
-            KokoziLedBrightnessNumber(coordinator, house_id)
+            entity(coordinator, house_id)
             for house_id in coordinator.data.houses
+            for entity in (KokoziLedBrightnessNumber, KokoziMaxVolumeNumber)
         ]
     )
 
@@ -57,6 +58,7 @@ class KokoziLedBrightnessNumber(KokoziEntity, NumberEntity):
             f"house_{house_id}_led_brightness",
             house_device_info(coordinator.data.houses[house_id]),
             NUMBER_DOMAIN,
+            "kokozi_house_led_brightness",
         )
 
     @property
@@ -72,6 +74,54 @@ class KokoziLedBrightnessNumber(KokoziEntity, NumberEntity):
         lightness = round(max(0, min(100, value)))
         await self.coordinator.client.async_set_house_led_lightness(
             await self.coordinator.async_get_access_token(), self.house_id, lightness
+        )
+        await self.coordinator.async_refresh_after_command()
+
+    @property
+    def house(self) -> dict[str, Any]:
+        """Return current house data."""
+        return self.coordinator.data.houses[self.house_id]
+
+
+class KokoziMaxVolumeNumber(KokoziEntity, NumberEntity):
+    """Kokozi House maximum volume number."""
+
+    entity_description = NumberEntityDescription(
+        key="max_volume",
+        name="Max Volume",
+        icon="mdi:volume-high",
+        native_min_value=1,
+        native_max_value=24,
+        native_step=1,
+        mode=NumberMode.SLIDER,
+    )
+
+    def __init__(
+        self, coordinator: KokoziDataUpdateCoordinator, house_id: str
+    ) -> None:
+        """Initialize the number."""
+        self.house_id = house_id
+        super().__init__(
+            coordinator,
+            f"house_{house_id}_max_volume",
+            house_device_info(coordinator.data.houses[house_id]),
+            NUMBER_DOMAIN,
+            "kokozi_house_max_volume",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current max volume."""
+        value = (self.house.get("volume") or {}).get("max")
+        if value is None:
+            return None
+        return float(value)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the max volume."""
+        max_volume = round(max(1, min(24, value)))
+        await self.coordinator.client.async_set_house_max_volume(
+            await self.coordinator.async_get_access_token(), self.house_id, max_volume
         )
         await self.coordinator.async_refresh_after_command()
 

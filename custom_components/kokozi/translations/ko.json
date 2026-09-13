@@ -1,0 +1,33 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Kokozi는 이미 설정되어 있습니다."
+    },
+    "error": {
+      "cannot_connect": "Kokozi에 연결할 수 없습니다.",
+      "invalid_auth": "이메일 또는 비밀번호가 올바르지 않습니다.",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "step": {
+      "user": {
+        "description": "Kokozi 이메일과 비밀번호로 로그인하세요.",
+        "data": {
+          "email": "이메일",
+          "password": "비밀번호"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "polling_interval": "폴링 간격"
+        },
+        "data_description": {
+          "polling_interval": "Home Assistant가 Kokozi 클라우드 데이터를 갱신하는 주기입니다."
+        }
+      }
+    }
+  }
+}

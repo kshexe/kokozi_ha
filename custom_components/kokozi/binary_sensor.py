@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import KokoziConfigEntry, KokoziDataUpdateCoordinator
-from .entity import KokoziEntity, arti_device_info, house_device_info
+from .entity import KokoziEntity, arti_group_device_info, house_device_info
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -46,13 +46,6 @@ HOUSE_BINARY_SENSORS: tuple[KokoziHouseBinarySensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda house: (house.get("battery") or {}).get("chargingState")
         == "Charging",
-    ),
-    KokoziHouseBinarySensorDescription(
-        key="plugged",
-        name="Plugged",
-        device_class=BinarySensorDeviceClass.PLUG,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda house: (house.get("battery") or {}).get("plugged"),
     ),
 )
 
@@ -95,6 +88,7 @@ class KokoziHouseBinarySensor(KokoziEntity, BinarySensorEntity):
             f"house_{house_id}_{description.key}",
             house_device_info(coordinator.data.houses[house_id]),
             BINARY_SENSOR_DOMAIN,
+            f"kokozi_house_{description.key}",
         )
 
     @property
@@ -110,9 +104,8 @@ class KokoziHouseBinarySensor(KokoziEntity, BinarySensorEntity):
 
 
 class KokoziArtiConnectedBinarySensor(KokoziEntity, BinarySensorEntity):
-    """Arti connected binary sensor."""
+    """Arti connected binary sensor, grouped under a single shared Arti device."""
 
-    _attr_name = "Connected"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
     def __init__(
@@ -120,11 +113,15 @@ class KokoziArtiConnectedBinarySensor(KokoziEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the binary sensor."""
         self.arti_id = arti_id
+        arti = coordinator.data.arties[arti_id]
+        self._attr_name = arti.get("name") or f"Arti {arti_id[-6:]}"
+        object_id = arti.get("typeId") or arti_id[-8:]
         super().__init__(
             coordinator,
             f"arti_{arti_id}_connected",
-            arti_device_info(coordinator.data.arties[arti_id]),
+            arti_group_device_info(),
             BINARY_SENSOR_DOMAIN,
+            f"kokozi_arti_{object_id}_connected",
         )
 
     @property

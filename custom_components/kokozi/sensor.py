@@ -107,6 +107,7 @@ class KokoziHouseSensor(KokoziEntity, SensorEntity):
             f"house_{house_id}_{description.key}",
             house_device_info(coordinator.data.houses[house_id]),
             SENSOR_DOMAIN,
+            f"kokozi_house_{description.key}",
         )
 
     @property

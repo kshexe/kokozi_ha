@@ -23,10 +23,12 @@ from .const import (
     DEFAULT_LOCALE,
     DEEP_LINK_AUTH_CODE,
     LOGGER,
+    LOGIN_PROVIDER_EMAIL,
     REDIRECT_URL,
 )
 
 LOGIN_INIT_URL = f"{API_BASE_URL}/auth/login/init"
+LOGIN_EMAIL_URL = f"{API_BASE_URL}/auth/login/email"
 TOKEN_URL = f"{API_BASE_URL}/auth/token"
 
 APP_USER_AGENT = (
@@ -125,6 +127,46 @@ class KokoziApiClient:
             raise KokoziAuthError(
                 f"Unexpected login init response: {response.status} {body[:200]}"
             )
+
+    async def async_login_with_email(self, email: str, password: str) -> KokoziToken:
+        """Login directly with an email/password pair and return tokens.
+
+        Reproduces what the hosted login page does in a browser: start a
+        login session via ``async_get_login_url``, then post the credentials
+        straight to the email login endpoint using that session's id.
+        """
+        login_url = await self.async_get_login_url(LOGIN_PROVIDER_EMAIL)
+        session_id = parse_qs(urlparse(login_url).query).get("sessionId", [None])[0]
+        if not session_id:
+            raise KokoziAuthError("Login init response did not include a sessionId")
+
+        try:
+            LOGGER.debug("Posting Kokozi email login: session_id=%s", session_id)
+            response = await self._session.post(
+                LOGIN_EMAIL_URL,
+                data={"email": email, "password": password, "sessionId": session_id},
+                headers={
+                    **APP_HEADERS,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                allow_redirects=False,
+            )
+        except (TimeoutError, ClientError) as err:
+            raise KokoziCannotConnect("Timed out while logging in") from err
+
+        async with response:
+            if response.status in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                if location:
+                    return await self.async_exchange_deep_link(location)
+
+            body = await response.text()
+            LOGGER.warning(
+                "Kokozi email login failed: status=%s body=%s",
+                response.status,
+                _sanitize_response_body(body, {})[:500],
+            )
+            raise KokoziAuthError("Invalid email or password")
 
     async def async_exchange_deep_link(self, callback_url: str) -> KokoziToken:
         """Exchange a Kokozi deep link callback URL for tokens."""
@@ -288,12 +330,23 @@ class KokoziApiClient:
             json_data={"current": current},
         )
 
+    async def async_set_house_max_volume(
+        self, access_token: str, house_id: str, max_volume: int
+    ) -> None:
+        """Set the house's maximum allowed volume."""
+        await self._async_authenticated_request(
+            "PUT",
+            f"{API_V1_BASE_URL}/houses/{house_id}/status/volume/max",
+            access_token,
+            json_data={"maxVolume": max_volume},
+        )
+
     async def async_set_house_led_lightness(
         self, access_token: str, house_id: str, lightness: int
     ) -> None:
         """Set house LED lightness."""
         await self._async_authenticated_request(
-            "PUT",
+            "POST",
             f"{API_V1_BASE_URL}/houses/{house_id}/led/lightness",
             access_token,
             json_data={"lightness": lightness},
