@@ -12,9 +12,7 @@ PLATFORMS: list[Platform] = [
     Platform.DEVICE_TRACKER,
     Platform.MEDIA_PLAYER,
     Platform.NUMBER,
-    Platform.SELECT,
     Platform.SENSOR,
-    Platform.SWITCH,
 ]
 
 
