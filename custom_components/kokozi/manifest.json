@@ -3,7 +3,7 @@
   "name": "Kokozi",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/custom-components/kokozi",
+  "documentation": "https://github.com/kshexe/kokozi_ha",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": [],
