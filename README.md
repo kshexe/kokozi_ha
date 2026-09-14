@@ -1,10 +1,14 @@
-Kokozi House for HomeAssistant
+Kokozi for Home Assistant
 ---
-### Feature
-* Select song from Arti.
-* Volume control
-* Play/Stop/Next/Previous
+Home Assistant integration for [Kokozi](https://kokozi.com/) smart speakers/houses.
+
+### Features
+* Media player: play/stop/next/previous, volume, shuffle, repeat, browse & select songs from Arti
+* Maximum volume control
 * LED brightness control
+* House online/charging status, battery, firmware version
+* Arti connection status (grouped under a single "아띠" device)
+* Wi-Fi device tracker for the house
 
 ### Install integration
 * Go to HACS from the side bar.
@@ -17,24 +21,7 @@ Kokozi House for HomeAssistant
 * Go to Settings and click `Devices & Integrations`
 * Click `+ Add Integration` on the right bottom side.
 * Select `Kokozi`
-* Select the login method according to your account.
-* Click the Link in the dialog.
-* In popup browser, press `F12` on your keyboard, DevTools will popup.
-* In DevTools, select `Network` and login with your account in web page.
-* Now, the webpage will hang, go to DevTools
-    * For Chrome
-        * Select the entry with `BottomTab`, then click `Header` page on the right side
-        * Copy ALL TEXT in `Request URL`
-        * Paste them to Setup in HomeAssistant dialog.
-![hacs1](images/ch.png)
+* Enter your Kokozi account email and password.
+* Click `Submit`.
 
-
-    * For Firefox
-        * Select entry with `POST` and `api.kokozi.co.kr`
-        * In `Response Headers` on the right side, copy ALL TEXT in `location`
-        * Paste them to Setup in HomeAssistant dialog.
-![hacs2](images/ff.png)
-
-    * The text will start with `kokozi:`
-* Click `Submit` in HomeAssistant
-
+That's it — no browser DevTools or manual token copying needed.
