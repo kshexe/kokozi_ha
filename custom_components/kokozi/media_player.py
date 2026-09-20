@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -53,6 +55,11 @@ STORY_RE = re.compile(
     r"^kokozi://playlist/(?P<playlist_id>[^/]+)/story/(?P<story_id>[^/]+)$"
 )
 
+# The physical Kokozi speaker can take longer than a single refresh cycle to
+# report a shuffle/repeat change back to the cloud. Retry the refresh with
+# backoff instead of trusting the first (possibly stale) response.
+OPTIMISTIC_REFRESH_DELAYS = (0.5, 1.5, 3.0)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -88,6 +95,10 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
             "kokozi_house",
         )
         self._attr_name = None
+        # Optimistic shuffle/repeat values shown while waiting for the cloud
+        # to confirm a just-issued command; see async_set_shuffle/repeat.
+        self._optimistic_shuffle: bool | None = None
+        self._optimistic_repeat: RepeatMode | None = None
 
     @property
     def house(self) -> dict[str, Any]:
@@ -129,6 +140,13 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
     @property
     def repeat(self) -> RepeatMode | str | None:
         """Return repeat mode."""
+        if self._optimistic_repeat is not None:
+            return self._optimistic_repeat
+        return self._real_repeat
+
+    @property
+    def _real_repeat(self) -> RepeatMode | None:
+        """Return the repeat mode as last reported by the cloud."""
         repeat = (self.house.get("house_play_state") or {}).get("repeat")
         if repeat == "none":
             return RepeatMode.OFF
@@ -139,6 +157,13 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
     @property
     def shuffle(self) -> bool | None:
         """Return shuffle mode."""
+        if self._optimistic_shuffle is not None:
+            return self._optimistic_shuffle
+        return self._real_shuffle
+
+    @property
+    def _real_shuffle(self) -> bool | None:
+        """Return the shuffle mode as last reported by the cloud."""
         return (self.house.get("house_play_state") or {}).get("shuffle")
 
     @property
@@ -262,19 +287,45 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
         if kokozi_repeat not in {"none", "one", "all"}:
             raise ValueError(f"Unsupported Kokozi repeat mode: {repeat}")
 
-        await self.coordinator.client.async_set_house_repeat(
-            await self.coordinator.async_get_access_token(),
-            self.house_id,
-            kokozi_repeat,
-        )
-        await self.coordinator.async_refresh_after_command()
+        # Show the requested mode right away - the speaker can take longer
+        # than one refresh cycle to report the change back to the cloud, and
+        # a stale refresh would otherwise flip the UI back to the old value.
+        self._optimistic_repeat = repeat
+        self.async_write_ha_state()
+        try:
+            await self.coordinator.client.async_set_house_repeat(
+                await self.coordinator.async_get_access_token(),
+                self.house_id,
+                kokozi_repeat,
+            )
+            await self._async_wait_for_cloud_state(lambda: self._real_repeat == repeat)
+        finally:
+            self._optimistic_repeat = None
+            self.async_write_ha_state()
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode."""
-        await self.coordinator.client.async_set_house_shuffle(
-            await self.coordinator.async_get_access_token(), self.house_id, shuffle
-        )
-        await self.coordinator.async_refresh_after_command()
+        self._optimistic_shuffle = shuffle
+        self.async_write_ha_state()
+        try:
+            await self.coordinator.client.async_set_house_shuffle(
+                await self.coordinator.async_get_access_token(), self.house_id, shuffle
+            )
+            await self._async_wait_for_cloud_state(lambda: self._real_shuffle == shuffle)
+        finally:
+            self._optimistic_shuffle = None
+            self.async_write_ha_state()
+
+    async def _async_wait_for_cloud_state(self, confirmed: Callable[[], bool]) -> None:
+        """Refresh with backoff until `confirmed()` is true or we give up.
+
+        `confirmed` is a zero-arg callable checked after each refresh.
+        """
+        for delay in OPTIMISTIC_REFRESH_DELAYS:
+            await asyncio.sleep(delay)
+            await self.coordinator.async_request_refresh()
+            if confirmed():
+                return
 
     async def async_play_media(
         self,
