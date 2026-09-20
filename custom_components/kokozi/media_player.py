@@ -28,8 +28,6 @@ from .const import (
     ATTR_ARTI_NAME,
     ATTR_PLAYLIST_ID,
     ATTR_PLAYLIST_NAME,
-    ATTR_REPEAT,
-    ATTR_SHUFFLE,
     ATTR_STORY_ID,
     DOMAIN,
 )
@@ -58,7 +56,7 @@ STORY_RE = re.compile(
 # The physical Kokozi speaker can take longer than a single refresh cycle to
 # report a shuffle/repeat change back to the cloud. Retry the refresh with
 # backoff instead of trusting the first (possibly stale) response.
-OPTIMISTIC_REFRESH_DELAYS = (0.5, 1.5, 3.0)
+OPTIMISTIC_REFRESH_DELAYS = (0.5, 1.5, 3.0, 5.0, 10.0)
 
 
 async def async_setup_entry(
@@ -209,8 +207,11 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
             ATTR_PLAYLIST_ID: self._current_playlist_id,
             ATTR_PLAYLIST_NAME: playlist.get("name") if playlist else None,
             ATTR_STORY_ID: self._current_story_id,
-            ATTR_SHUFFLE: self.shuffle,
-            ATTR_REPEAT: (self.house.get("house_play_state") or {}).get("repeat"),
+            # Not ATTR_SHUFFLE/ATTR_REPEAT here - those are the literal strings
+            # "shuffle"/"repeat", which collide with the standard media_player
+            # attributes of the same name (already correctly populated from
+            # the self.shuffle/self.repeat properties above) and would
+            # overwrite them with the raw, untranslated Kokozi value.
             "chapter_jump": (self.house.get("house_play_state") or {}).get(
                 "chapter_jump"
             ),
@@ -292,40 +293,45 @@ class KokoziHouseMediaPlayer(KokoziEntity, MediaPlayerEntity):
         # a stale refresh would otherwise flip the UI back to the old value.
         self._optimistic_repeat = repeat
         self.async_write_ha_state()
-        try:
-            await self.coordinator.client.async_set_house_repeat(
-                await self.coordinator.async_get_access_token(),
-                self.house_id,
-                kokozi_repeat,
-            )
-            await self._async_wait_for_cloud_state(lambda: self._real_repeat == repeat)
-        finally:
-            self._optimistic_repeat = None
-            self.async_write_ha_state()
+        await self.coordinator.client.async_set_house_repeat(
+            await self.coordinator.async_get_access_token(),
+            self.house_id,
+            kokozi_repeat,
+        )
+        if await self._async_wait_for_cloud_state(lambda: self._real_repeat == repeat):
+            # Only clear our own optimistic value - a newer call may have
+            # already moved it on to a different requested mode.
+            if self._optimistic_repeat == repeat:
+                self._optimistic_repeat = None
+                self.async_write_ha_state()
+        # If it never confirmed, leave the optimistic value showing rather
+        # than snapping back to a value we already know is stale - the next
+        # regular poll (or a later call) will settle it either way.
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode."""
         self._optimistic_shuffle = shuffle
         self.async_write_ha_state()
-        try:
-            await self.coordinator.client.async_set_house_shuffle(
-                await self.coordinator.async_get_access_token(), self.house_id, shuffle
-            )
-            await self._async_wait_for_cloud_state(lambda: self._real_shuffle == shuffle)
-        finally:
-            self._optimistic_shuffle = None
-            self.async_write_ha_state()
+        await self.coordinator.client.async_set_house_shuffle(
+            await self.coordinator.async_get_access_token(), self.house_id, shuffle
+        )
+        if await self._async_wait_for_cloud_state(lambda: self._real_shuffle == shuffle):
+            if self._optimistic_shuffle == shuffle:
+                self._optimistic_shuffle = None
+                self.async_write_ha_state()
 
-    async def _async_wait_for_cloud_state(self, confirmed: Callable[[], bool]) -> None:
+    async def _async_wait_for_cloud_state(self, confirmed: Callable[[], bool]) -> bool:
         """Refresh with backoff until `confirmed()` is true or we give up.
 
         `confirmed` is a zero-arg callable checked after each refresh.
+        Returns whether it was actually confirmed.
         """
         for delay in OPTIMISTIC_REFRESH_DELAYS:
             await asyncio.sleep(delay)
             await self.coordinator.async_request_refresh()
             if confirmed():
-                return
+                return True
+        return False
 
     async def async_play_media(
         self,
